@@ -1,16 +1,19 @@
+'''
+Get Kindercare Media for child
+'''
 import getopt
-import json
 import os
+import pickle
 import sys
 import requests
-#from exif import Image
+# from exif import Image
 from PIL import Image
-import pickle
 import piexif
 import ffmpeg
 import mutagen
 
 HIMAMA_SESSION_ID = ''
+
 
 def usage() -> None:
     '''
@@ -27,7 +30,7 @@ def usage() -> None:
     sys.exit(1)
 
 
-def get_options(args: list[str]) -> dict[str,str]:
+def get_options(args: list[str]) -> dict[str, str]:
     '''
     Parses command-line arguments and returns a dictionary of options.
 
@@ -60,8 +63,7 @@ def get_options(args: list[str]) -> dict[str,str]:
     long_options = [
         'metadata activity is added as caption below the picture',
         'ignore database - id of the downloaded media is not added to the local db',
-        "child id value for the child's profile = "
-    ]
+        "child id value for the child's profile = "]
 
     try:
         arguments, _ = getopt.getopt(args, options, long_options)
@@ -70,34 +72,35 @@ def get_options(args: list[str]) -> dict[str,str]:
             'db_insert': 'True',
             'id': '0'
         }
-        for currentArgument, currentValue in arguments:
-            if currentArgument in ('-c', '--metadata'):
+        for currentargument, currentvalue in arguments:
+            if currentargument in ('-c', '--metadata'):
                 inputs['caption'] = 'True'
-            elif currentArgument in ('-i', '--ignore_db'):
+            elif currentargument in ('-i', '--ignore_db'):
                 inputs['db_insert'] = 'False'
-            elif currentArgument in ('-k', '--id'):
-                inputs['id'] = currentValue
-            elif currentArgument in ('-h', '--help'):
+            elif currentargument in ('-k', '--id'):
+                inputs['id'] = currentvalue
+            elif currentargument in ('-h', '--help'):
                 print('get help')
 
     except getopt.error as err:
         # output error, and return with an error code
-        print (str(err), type(err))
+        print(str(err), type(err))
         usage()
 
     return inputs
 
-def make_db_file(id: str, db_insert: bool) -> None:
+
+def make_db_file(child_id: str, db_insert: bool) -> None:
     '''
     Creates or checks a database file for a given child ID.
 
-    This function ensures that a database file named `id.db` exists for a specific
+    This function ensures that a database file named id.db exists for a specific
     child ID within a corresponding directory. It creates the directory and file
     if necessary and checks for writability. It also handles potential errors and
     exits the program with an error code if file creation or writing fails.
 
     Args:
-        id: The child ID string for which the database file is managed.
+        child_id: The child ID string for which the database file is managed.
         db_insert: A string indicating whether the user wants to update the database
             (value "0"). If not set to "0", the database file is not created or checked.
 
@@ -107,29 +110,27 @@ def make_db_file(id: str, db_insert: bool) -> None:
     Raises:
         OSError: If file/directory creation or writing fails.
     '''
-    if os.path.exists(f'{os.getcwd()}/{id}'):
-        if db_insert == True: # user wants to update the db, check we can write to it
-            if os.access(f'{os.getcwd()}/{id}/id.db', os.W_OK):
-                print(f'{os.getcwd()}/{id}/id.db exists and is writable.')
-            else:
-                print(f'{os.getcwd()}/{id}/id.db exists but is not writable.\
+    if os.path.exists(f'{os.getcwd()}/{child_id}'):
+        if db_insert:  # user wants to update the db, check we can write to it
+            if not os.access(f'{os.getcwd()}/{child_id}/id.db', os.W_OK):
+                print(f'{os.getcwd()}/{child_id}/id.db exists but is not writable.\
                     Downloaded media will not be added to db')
         try:
-            if os.path.isfile(f'{os.getcwd()}/{id}/id.db'):
-                if not os.access(f'{os.getcwd()}/{id}/id.db', os.W_OK):
+            if os.path.isfile(f'{os.getcwd()}/{child_id}/id.db'):
+                if not os.access(f'{os.getcwd()}/{child_id}/id.db', os.W_OK):
                     print("The file exists but is not writable.")
             else:
                 # Create the file
-                with open(f'{os.getcwd()}/{id}/id.db', "w") as f:
-                    f.write("0")
+                with open(f'{os.getcwd()}/{child_id}/id.db', "w", encoding='utf-8') as f:
+                    f.write('')
                 print("The file was created and is writable.")
         except OSError as oserr:
             print(f'Cannot create db file: {oserr}')
             sys.exit(2)
     else:
         try:
-            os.makedirs(f'{os.getcwd()}/{id}')
-            print(f'{os.getcwd()}/{id}')
+            os.makedirs(f'{os.getcwd()}/{child_id}')
+            print(f'{os.getcwd()}/{child_id}')
         except OSError as oserr:
             print(f'Cannot create db folder: {oserr}')
             sys.exit(2)
@@ -159,21 +160,21 @@ def get_db_entries(filename: str) -> set[str]:
         {"entry1", "entry2", "entry3"}
     '''
     try:
-        return set(open(filename).read().split())
+        return set(open(filename, encoding='utf-8').read().split())
     except OSError as oserr:
         print(f'OS Error: {oserr}')
         sys.exit(3)
 
 
-def connect_to_kc(id: str, id_set: set[str]) -> dict[str, any]:
+def connect_to_kc(child_id: str, id_set: set[str]) -> dict[str, any]:
     '''
-    This function connects to the KinderCare classroom API using the provided child ID, 
+    This function connects to the KinderCare classroom API using the provided child ID,
     fetches media entries, extracts relevant information, and returns a dictionary
     containing the processed data. It uses the `id_set` for comparison and deduplication
     purposes.
 
     Args:
-        id: The child ID string used for data retrieval (str).
+        child_id: The child ID string used for data retrieval (str).
         id_set: A set of existing media IDs for comparison and deduplication (set[str]).
 
     Returns:
@@ -194,20 +195,21 @@ def connect_to_kc(id: str, id_set: set[str]) -> dict[str, any]:
     while new_results:
         print(f'Getting media from page {count}')
         try:
-            req = requests.get(f'https://classroom.kindercare.com/accounts/{id}/journal_api?page={count}',
-                        cookies=cookies,
-                        timeout=30).json()
-        except:
-            print('failed')
+            req = requests.get(
+                f'https://classroom.kindercare.com/accounts/{child_id}/journal_api?page={count}',
+                cookies=cookies,
+                timeout=30).json()
+        except requests.exceptions.RequestException as err:
+            print(f'Failed to get data from page {count}. Error: {err}')
         results.update(get_kcdata(req, id_set))
         if len(req['intervals']) == 0:
             new_results = False
             print('All media retrieved')
         count += 1
-    return(results)
+    return results
 
 
-def get_kcdata(json_data:dict[str, any], id_set: set[str]) -> dict[str, str]:
+def get_kcdata(json_data: dict[str, any], id_set: set[str]) -> dict[str, str]:
     '''
     Processes KinderCare API data to extract media information and filters based on an ID set.
 
@@ -218,7 +220,8 @@ def get_kcdata(json_data:dict[str, any], id_set: set[str]) -> dict[str, str]:
     the id_set are skipped.
 
     Args:
-        json_data: A dictionary containing the parsed JSON response from the KinderCare API (dict[str, any]).
+        json_data: A dictionary containing the parsed JSON response from the KinderCare API 
+            (dict[str, any]).
         id_set: A set of existing media IDs used for deduplication (set[str]).
 
     Returns:
@@ -229,17 +232,18 @@ def get_kcdata(json_data:dict[str, any], id_set: set[str]) -> dict[str, str]:
             - 'desc': The description of the activity (string).
             - 'create_date': The date and time the activity was created (string).
             - 'image': The URL of the image associated with the activity (string).
-            - 'video': The URL of the video associated with the activity (string, or empty string if no video exists).
+            - 'video': The URL of the video associated with the activity (string, or empty string 
+                        if no video exists).
 
     See Also:
         - connect_to_kc() (function that might use this function internally)
     '''
     media_files = {}
-    for day, data in json_data['intervals'].items():
+    for _, data in json_data['intervals'].items():
         for item in enumerate(data):
-            if f"{item[1]['activity']['id']}" in id_set:
-                next
-            else:
+            if f"{item[1]['activity']['id']}" not in id_set:
+                # continue
+            # else:
                 activity_id = item[1]['activity']['id']
                 title = item[1]['activity']['title']
                 if title == '':
@@ -251,17 +255,20 @@ def get_kcdata(json_data:dict[str, any], id_set: set[str]) -> dict[str, str]:
                 image = item[1]['activity']['image']['big']['url']
                 video = item[1]['activity']['video']['url']
                 media_files[activity_id] = {
-                                            'title': title,
-                                            'desc': desc,
-                                            'create_date': create_date,
-                                            'image': image,
-                                            'video': video
-                                            }
+                    'title': title,
+                    'desc': desc,
+                    'create_date': create_date,
+                    'image': image,
+                    'video': video
+                }
     return media_files
 
-def get_images_videos(media_info: dict[str, dict[str, str]], id_num: str) -> set[str]:
+
+def get_images_videos(
+        media_info: dict[str, dict[str, str]], id_num: str) -> set[str]:
     '''
-    Downloads and saves images and videos from KinderCare API data, updates metadata, and returns downloaded IDs.
+    Downloads and saves images and videos from KinderCare API data, updates metadata, and 
+    returns downloaded IDs.
 
     This function iterates through a dictionary containing media information (media_info)
     and extracts image and video URLs. It attempts to download each valid URL, saves the
@@ -280,34 +287,39 @@ def get_images_videos(media_info: dict[str, dict[str, str]], id_num: str) -> set
         requests.exceptions.RequestException: If an error occurs during downloads.
     '''
     ids_downloaded = set()
-    for id, data in media_info.items():
-        if data['image'] != None:
+    for activity_id, data in media_info.items():
+        if data['image'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}/{id_num}/{id}_{date}.jpg'
+            filename = f'{os.getcwd()}/{id_num}/{activity_id}_{date}.jpg'
             try:
                 req = requests.get(data['image'], timeout=30)
                 req.raise_for_status()
             except requests.exceptions.RequestException as err:
-                print(f'unable to get image {data["image"]}: {req.status_code}')
+                print(
+                    f'unable to get image {
+                        data["image"]}: {req.status_code} - {err}')
             open(filename, 'wb').write(req.content)
             # update_exif_data(filename, data)
-            ids_downloaded.add(id)
+            ids_downloaded.add(activity_id)
 
-        if data['video'] != None:
+        if data['video'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}/{id_num}/{id}_{date}.mov'
+            filename = f'{os.getcwd()}/{id_num}/{activity_id}_{date}.mov'
             try:
                 req = requests.get(data['video'], timeout=30)
                 req.raise_for_status()
             except requests.exceptions.RequestException as err:
-                print(f'unable to get image {data["image"]}: {req.status_code}')
+                print(
+                    f'unable to get image {
+                        data["image"]}: {req.status_code} - {err}')
 
             open(filename, 'wb').write(req.content)
             # update_video_data(filename, data)
-            ids_downloaded.add(id)
+            ids_downloaded.add(activity_id)
     return ids_downloaded
 
-def update_db_info(id:set[str]) -> None:
+
+def update_db_info(child_id: str, activity_id: set[str]) -> None:
     '''
     Updates a local database file with a set of downloaded media IDs.
 
@@ -317,6 +329,7 @@ def update_db_info(id:set[str]) -> None:
     with each ID on a separate line.
 
     Args:
+        child_id: A string ID of the child ID.
         id_set: A set containing string IDs of downloaded media (set[str]).
 
     Returns:
@@ -326,34 +339,33 @@ def update_db_info(id:set[str]) -> None:
     IOError: If an error occurs while reading or writing the file.
     OSError: If an error occurs while reading or writing the file.
     '''
-    filename = f'{os.getcwd()}/{getopts["id"]}/id.db'
-    current_db = set(open(filename).read().split())
-    current_db.update(id)
+    filename = f'{os.getcwd()}/{child_id}/id.db'
+    current_db = set(open(filename, encoding='utf-8').read().split())
+    current_db.update(activity_id)
     try:
         with open(filename, 'w', encoding='utf-8') as id_db:
-            for id in current_db:
-                id_db.write(f'{id}\n')
+            for id_number in current_db:
+                id_db.write(f'{id_number}\n')
     except (OSError, IOError) as oserr:
         print(f'Unable to write to id.db file: {oserr}')
-    
 
 
-def update_exif_data(filename: str, media_info:dict):
+def update_exif_data(filename: str, media_info: dict):
     '''
     Updates the exif data on the images downloaded
-    
+
     Still being worked on as data is not written in a readable format
-    
+
     '''
     # with open(filename, 'rb') as image:
     print('DEBUG: exif')
-    date = media_info['create_date'].replace(':', '_')
-    new_fn = f'{os.getcwd()}/{getopts["id"]}/{date}.jpg'
+    # date = media_info['create_date'].replace(':', '_')
+    # new_fn = f'{os.getcwd()}/{getopts["id"]}/{date}.jpg'
     exif_ifd = {
-                piexif.ExifIFD.UserComment: media_info['desc'].encode(),
-                piexif.ExifIFD.DateTimeOriginal: media_info['create_date'].encode(),
-                # piexif.ExifIFD.Title: media_info['title'].encode()
-               }
+        piexif.ExifIFD.UserComment: media_info['desc'].encode(),
+        piexif.ExifIFD.DateTimeOriginal: media_info['create_date'].encode(),
+        # piexif.ExifIFD.Title: media_info['title'].encode()
+    }
     print(exif_ifd)
     data = pickle.dumps(exif_ifd)
     exif_ifd = {piexif.ExifIFD.MakerNote: data}
@@ -363,26 +375,27 @@ def update_exif_data(filename: str, media_info:dict):
 
     img = Image.open(filename)
     # exif_dict = {
-                # "0th": {},
-                # "Exif": exif_ifd, "1st": {},
-                # piexif.ExifIFD.MakerNote
-                # }
+    # "0th": {},
+    # "Exif": exif_ifd, "1st": {},
+    # piexif.ExifIFD.MakerNote
+    # }
 
     exif_dat = piexif.dump(exif_dict)
     print(exif_dat)
     try:
-        img.save(filename,  exif=exif_dat)
+        img.save(filename, exif=exif_dat)
     except Exception as err:
         print(f'ERR: {err}')
-    
+
     print('DEBUG: end exif')
 
-def update_video_data(filename: str, media_info:dict):
+
+def update_video_data(filename: str, media_info: dict):
     '''
     Updates the exif data on the videos downloaded
-    
+
     Still being worked on as data is not written in a readable format
-    
+
     '''
     # input_stream = ffmpeg.input(filename)
     # input_stream = input_stream.output(filename, metadata={'title': media_info['title']})
@@ -392,7 +405,6 @@ def update_video_data(filename: str, media_info:dict):
     mov_file['title'] = media_info['title']
     mov_file['comments'] = media_info['desc']
     mov_file.save()
-
 
 
 getopts = get_options(sys.argv[1:])
@@ -405,4 +417,4 @@ kc_web_data = connect_to_kc(getopts['id'], db_ids)
 # new_ids = get_images_videos(kc_media, getopts['id'])
 # update_db_info(new_ids)
 new_ids = get_images_videos(kc_web_data, getopts['id'])
-update_db_info(new_ids)
+update_db_info(getopts['id'], new_ids)
