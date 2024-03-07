@@ -27,4 +27,5 @@ kcsync -ik ######
 
 
 This was tested on Python 3.11 with the modules in the requirements.txt file.
- 
+
+This was based on the shell script from tkuppens located at https://github.com/tkuppens/kindercare
