@@ -1,16 +1,14 @@
 '''
 Get Kindercare Media for child
 '''
+from datetime import datetime
 import getopt
 import os
-import pickle
+import subprocess
 import sys
 import requests
-# from exif import Image
-from PIL import Image
-import piexif
+import moviepy.editor as mpe
 import ffmpeg
-import mutagen
 
 HIMAMA_SESSION_ID = ''
 
@@ -26,7 +24,7 @@ def usage() -> None:
   Returns:
     None. The function primarily prints information and exits the script.
     '''
-    print(f'Usage: {sys.argv[0]} [-cik xxxxxxx]')
+    print(f'Usage: {sys.argv[0]} [-i -k xxxxxxx]')
     sys.exit(1)
 
 
@@ -35,7 +33,7 @@ def get_options(args: list[str]) -> dict[str, str]:
     Parses command-line arguments and returns a dictionary of options.
 
     This function takes a list of command-line arguments and processes them using the
-    `getopt` module. It supports both short and long options and maps them to a
+    getopt module. It supports both short and long options and maps them to a
     dictionary with descriptive keys and string values representing the user's choices.
 
     Args:
@@ -43,8 +41,6 @@ def get_options(args: list[str]) -> dict[str, str]:
 
     Returns:
         A dictionary containing parsed options with the following keys:
-          - `caption` (str): 'True' if the user wants metadata added as a caption,
-                              'False' otherwise (default).
           - `db_insert` (str): 'True' if the downloaded media ID should be added
                               to the local database, 'False' otherwise (default).
           - `id` (str): The child ID value provided by the user using the '-k' or
@@ -54,29 +50,25 @@ def get_options(args: list[str]) -> dict[str, str]:
         getopt.error: If an error occurs during option parsing.
 
     Examples:
-        >>> options = get_options(["-c", "-k", "123"])
+        >>> options = get_options(["-k", "123"])
         >>> print(options)
-        {'caption': 'True', 'db_insert': 'True', 'id': '123'}
+        {'db_insert': 'True', 'id': '123'}
     '''
-    options = 'cik:'
+    options = 'ik:'
 
     long_options = [
-        'metadata activity is added as caption below the picture',
         'ignore database - id of the downloaded media is not added to the local db',
         "child id value for the child's profile = "]
 
     try:
         arguments, _ = getopt.getopt(args, options, long_options)
         inputs = {
-            'caption': 'False',
             'db_insert': 'True',
             'id': '0'
         }
         for currentargument, currentvalue in arguments:
-            if currentargument in ('-c', '--metadata'):
-                inputs['caption'] = 'True'
-            elif currentargument in ('-i', '--ignore_db'):
-                inputs['db_insert'] = 'False'
+            if currentargument in ('-i', '--ignore_db'):
+                inputs['db_insert'] = False
             elif currentargument in ('-k', '--id'):
                 inputs['id'] = currentvalue
             elif currentargument in ('-h', '--help'):
@@ -110,18 +102,17 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
     Raises:
         OSError: If file/directory creation or writing fails.
     '''
-    if os.path.exists(f'{os.getcwd()}/{child_id}'):
+    if os.path.exists(f'{os.getcwd()}\\{child_id}'):
         if db_insert:  # user wants to update the db, check we can write to it
-            if not os.access(f'{os.getcwd()}/{child_id}/id.db', os.W_OK):
-                print(f'{os.getcwd()}/{child_id}/id.db exists but is not writable.\
-                    Downloaded media will not be added to db')
+            if not os.access(f'{os.getcwd()}\\{child_id}\\id.db', os.W_OK):
+                print('Folder exists but is not writable. Downloaded media will not be added to db')
         try:
-            if os.path.isfile(f'{os.getcwd()}/{child_id}/id.db'):
-                if not os.access(f'{os.getcwd()}/{child_id}/id.db', os.W_OK):
+            if os.path.isfile(f'{os.getcwd()}\\{child_id}\\id.db'):
+                if not os.access(f'{os.getcwd()}\\{child_id}\\id.db', os.W_OK):
                     print("The file exists but is not writable.")
             else:
                 # Create the file
-                with open(f'{os.getcwd()}/{child_id}/id.db', "w", encoding='utf-8') as f:
+                with open(f'{os.getcwd()}\\{child_id}\\id.db', "w", encoding='utf-8') as f:
                     f.write('')
                 print("The file was created and is writable.")
         except OSError as oserr:
@@ -129,8 +120,8 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
             sys.exit(2)
     else:
         try:
-            os.makedirs(f'{os.getcwd()}/{child_id}')
-            print(f'{os.getcwd()}/{child_id}')
+            os.makedirs(f'{os.getcwd()}\\{child_id}')
+            print(f'{os.getcwd()}\\{child_id}')
         except OSError as oserr:
             print(f'Cannot create db folder: {oserr}')
             sys.exit(2)
@@ -257,7 +248,7 @@ def get_kcdata(json_data: dict[str, any], id_set: set[str]) -> dict[str, str]:
                 media_files[activity_id] = {
                     'title': title,
                     'desc': desc,
-                    'create_date': create_date,
+                    'create_date': create_date.split('.',2)[0],
                     'image': image,
                     'video': video
                 }
@@ -290,7 +281,7 @@ def get_images_videos(
     for activity_id, data in media_info.items():
         if data['image'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}/{id_num}/{activity_id}_{date}.jpg'
+            filename = f'{os.getcwd()}\\{id_num}\\{activity_id}_{date}.jpg'
             try:
                 req = requests.get(data['image'], timeout=30)
                 req.raise_for_status()
@@ -299,12 +290,12 @@ def get_images_videos(
                     f'unable to get image {
                         data["image"]}: {req.status_code} - {err}')
             open(filename, 'wb').write(req.content)
-            # update_exif_data(filename, data)
+            update_exif_data(filename, data)
             ids_downloaded.add(activity_id)
 
         if data['video'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}/{id_num}/{activity_id}_{date}.mov'
+            filename = f'{os.getcwd()}\\{id_num}\\{activity_id}_{date}.mov'
             try:
                 req = requests.get(data['video'], timeout=30)
                 req.raise_for_status()
@@ -357,37 +348,21 @@ def update_exif_data(filename: str, media_info: dict):
     Still being worked on as data is not written in a readable format
 
     '''
-    # with open(filename, 'rb') as image:
-    print('DEBUG: exif')
-    # date = media_info['create_date'].replace(':', '_')
-    # new_fn = f'{os.getcwd()}/{getopts["id"]}/{date}.jpg'
-    exif_ifd = {
-        piexif.ExifIFD.UserComment: media_info['desc'].encode(),
-        piexif.ExifIFD.DateTimeOriginal: media_info['create_date'].encode(),
-        # piexif.ExifIFD.Title: media_info['title'].encode()
-    }
-    print(exif_ifd)
-    data = pickle.dumps(exif_ifd)
-    exif_ifd = {piexif.ExifIFD.MakerNote: data}
+    title = media_info['title']
+    comment = media_info['desc']
+    orig_date = datetime.strptime(media_info['create_date'], '%Y-%m-%dT%H:%M:%S')
 
-    exif_dict = {"0th": {}, "Exif": exif_ifd, "1st": {},
-                 "thumbnail": None, "GPS": {}}
+    exiftool_arg1 = f'-xptitle="{title}"'
+    exiftool_arg2 = f'-xpcomment="{comment}"'
+    exiftool_arg3 = f'-datetimeoriginal="{orig_date}"'
+    exiftool_arg4 = '-q'
+   
+    try: 
+        ans = subprocess.check_call(['exiftool.exe', exiftool_arg1, exiftool_arg2, exiftool_arg3, exiftool_arg4, filename])
+        os.remove(f'{filename}_original')
+    except subprocess.CalledProcessError as e: 
+        print(f"Command failed with return code {e.returncode}")
 
-    img = Image.open(filename)
-    # exif_dict = {
-    # "0th": {},
-    # "Exif": exif_ifd, "1st": {},
-    # piexif.ExifIFD.MakerNote
-    # }
-
-    exif_dat = piexif.dump(exif_dict)
-    print(exif_dat)
-    try:
-        img.save(filename, exif=exif_dat)
-    except Exception as err:
-        print(f'ERR: {err}')
-
-    print('DEBUG: end exif')
 
 
 def update_video_data(filename: str, media_info: dict):
@@ -397,14 +372,10 @@ def update_video_data(filename: str, media_info: dict):
     Still being worked on as data is not written in a readable format
 
     '''
-    # input_stream = ffmpeg.input(filename)
-    # input_stream = input_stream.output(filename, metadata={'title': media_info['title']})
-    # ffmpeg.run(input_stream)
-    mov_file = mutagen.File(filename)
-    print(mov_file, type(mov_file))
-    mov_file['title'] = media_info['title']
-    mov_file['comments'] = media_info['desc']
-    mov_file.save()
+    title = media_info['title']
+    comment = media_info['desc']
+
+    ffmpeg.input(filename).output(f'{filename}_new.mov', metadata=f'title={title} {comment}', map=0, c='copy', v='quiet').overwrite_output().run()
 
 
 getopts = get_options(sys.argv[1:])
@@ -413,8 +384,7 @@ make_db_file(getopts['id'], getopts['db_insert'])
 
 db_ids = get_db_entries(f'{os.getcwd()}/{getopts["id"]}/id.db')
 kc_web_data = connect_to_kc(getopts['id'], db_ids)
-# kc_media = get_kcdata(kc_web_data, db_ids)
-# new_ids = get_images_videos(kc_media, getopts['id'])
-# update_db_info(new_ids)
 new_ids = get_images_videos(kc_web_data, getopts['id'])
-update_db_info(getopts['id'], new_ids)
+
+if getopts['db_insert']:
+    update_db_info(getopts['id'], new_ids)
