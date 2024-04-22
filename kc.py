@@ -7,10 +7,12 @@ import os
 import subprocess
 import sys
 import requests
-import moviepy.editor as mpe
 import ffmpeg
-
-HIMAMA_SESSION_ID = ''
+from selenium import webdriver
+import getpass
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 def usage() -> None:
@@ -189,11 +191,12 @@ def connect_to_kc(child_id: str, id_set: set[str]) -> dict[str, any]:
             req = requests.get(
                 f'https://classroom.kindercare.com/accounts/{child_id}/journal_api?page={count}',
                 cookies=cookies,
-                timeout=30).json()
+                timeout=30)
+            req.raise_for_status()
         except requests.exceptions.RequestException as err:
             print(f'Failed to get data from page {count}. Error: {err}')
-        results.update(get_kcdata(req, id_set))
-        if len(req['intervals']) == 0:
+        results.update(get_kcdata(req.json(), id_set))
+        if len(req.json()['intervals']) == 0:
             new_results = False
             print('All media retrieved')
         count += 1
@@ -364,7 +367,6 @@ def update_exif_data(filename: str, media_info: dict):
         print(f"Command failed with return code {e.returncode}")
 
 
-
 def update_video_data(filename: str, media_info: dict):
     '''
     Updates the exif data on the videos downloaded
@@ -378,7 +380,56 @@ def update_video_data(filename: str, media_info: dict):
     ffmpeg.input(filename).output(f'{filename}_new.mov', metadata=f'title={title} {comment}', map=0, c='copy', v='quiet').overwrite_output().run()
 
 
+def signme_in(username, password, signin_url):
+    '''
+    Logs in to a website using the provided credentials and waits for page change.
+
+    This function attempts to log in to a website at the specified URL (signin_url)
+    using the provided username and password. It finds the login form elements using
+    XPath for the username field and ID for the password field, enters the credentials,
+    and submits the form. It then waits for the page URL to change, indicating a successful
+    login, with a maximum timeout of 300 seconds.
+
+  Args:
+    username: The username for login (str).
+    password: The password for login (str).
+    signin_url: The URL of the login page (str).
+
+  Returns:
+    The the value for the _himana_session cookie
+
+  Raises:
+    SystemExit: If an exception occurs during the login process.
+    '''
+
+    
+    driver = webdriver.Chrome()
+    driver.get(signin_url)
+    loginuser = driver.find_element(By.XPATH, '//input[@id="user_login"]')
+    loginpass = driver.find_element(By.ID, "user_password")
+    loginuser.click()
+    loginuser.send_keys(username)
+    loginpass.click()
+    loginpass.send_keys(password)
+
+    # Submit login, have to wait for page to change
+    try:
+        loginpass.submit()
+        WebDriverWait(driver, 300).until(EC.url_changes(signin_url))
+    except:
+        raise SystemExit
+    return driver.get_cookie('_himama_session')['value']
+
+
+
 getopts = get_options(sys.argv[1:])
+
+username = input('Please enter your Kindercare Classroom login (email/username):')
+print('Please enter your Kindercare Classroom login password:')
+password = getpass.getpass()
+
+HIMAMA_SESSION_ID = signme_in(username, password, 'https://classroom.kindercare.com')
+print(HIMAMA_SESSION_ID)
 
 make_db_file(getopts['id'], getopts['db_insert'])
 
@@ -388,3 +439,7 @@ new_ids = get_images_videos(kc_web_data, getopts['id'])
 
 if getopts['db_insert']:
     update_db_info(getopts['id'], new_ids)
+
+
+
+
