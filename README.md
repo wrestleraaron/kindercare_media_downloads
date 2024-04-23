@@ -10,26 +10,24 @@ Sync utility for kindercre media. This uses a Local id db (file: id.db) makes su
 
 Thild id is required for downloading media.  To get the child id go to https://classroom.kindercare.accounts. The child ID is in the url in the format: https://classroom.kindercare.com/accounts/xxxxxx 
 
-The Himama session ID is required.  The easiest way to get this is as follows:
-* Click the journal tab after logging in (url is similar to: https://classroom.kindercare.com/accounts/xxxxx/journal)
-* Right-click on the page and choose "Inspect"
-* Click the network tab and reload the page
-* Look for the Name "journal" and Click on Headers
-* Look for the Request Header named Cookie and grab the characters after "_himama_session" and in line 15 as the value for "HIMAMA_SESSION_ID"
+You will be prompted for your username and password to the Kindercare classroom page.  This is required to get a necessary cookie. This information is not stored or saved anywhere. After you enter your password a Chrome Window will open. It will close on its own.
+
+Requirements:
+* Chromedriver.exe (tested with 122.0.6261.128 and Chrome 123). Download at: https://googlechromelabs.github.io/chrome-for-testing/
+* exiftool.exe (tested with 12.7.8.0). Download at: https://exiftool.org/
 
 Use
 ---
 
-kcsync -ik ######
+kcsync -k ######
 
-	-i : ignore db - id of downloaded media is not added to the local db (so media can be downloaded again)
 	-k : child id value for the child's profile xxxxxx
-
-
-This was tested on Python 3.11 with the modules in the requirements.txt file.
+	(optional flag) -i : ignore db - id of downloaded media is not added to the local db (so media can be downloaded again)
+	
+This was tested on Python 3.12.2 with the modules in the requirements.txt file.
 
 Known Issues
 ---
-	Exif data and metadata are not added to images or videos.
+	Metadata is not added videos.
 
 This was based on the shell script from tkuppens located at https://github.com/tkuppens/kindercare
