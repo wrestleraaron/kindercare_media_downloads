@@ -105,31 +105,37 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
     Raises:
         OSError: If file/directory creation or writing fails.
     '''
-    if os.path.exists(f'{os.getcwd()}\\{child_id}'):
+    if os.path.exists(fr'{os.getcwd()}\{child_id}'):
         if db_insert:  # user wants to update the db, check we can write to it
-            if not os.access(f'{os.getcwd()}\\{child_id}\\id.db', os.W_OK):
+            if not os.access(fr'{os.getcwd()}\{child_id}\id.db', os.W_OK):
                 print(
                     'Folder exists but is not writable. Downloaded media will not be added to db')
         try:
-            if os.path.isfile(f'{os.getcwd()}\\{child_id}\\id.db'):
-                if not os.access(f'{os.getcwd()}\\{child_id}\\id.db', os.W_OK):
+            if os.path.isfile(fr'{os.getcwd()}\{child_id}\id.db'):
+                if not os.access(fr'{os.getcwd()}\{child_id}\id.db', os.W_OK):
                     print("The file exists but is not writable.")
             else:
                 # Create the file
-                with open(f'{os.getcwd()}\\{child_id}\\id.db', "w", encoding='utf-8') as f:
+                with open(fr'{os.getcwd()}\{child_id}\id.db', "w", encoding='utf-8') as f:
                     f.write('')
                 print("The file was created and is writable.")
         except OSError as oserr:
             print(f'Cannot create db file: {oserr}')
             sys.exit(2)
     else:
-        try:
-            os.makedirs(f'{os.getcwd()}\\{child_id}')
-            print(f'{os.getcwd()}\\{child_id}')
+        try: # Create the folder
+            os.makedirs(fr'{os.getcwd()}\{child_id}')
+            print(fr'{os.getcwd()}\{child_id}')
         except OSError as oserr:
             print(f'Cannot create db folder: {oserr}')
             sys.exit(2)
-
+        try: # Create the file
+            with open(fr'{os.getcwd()}\{child_id}\id.db', "w", encoding='utf-8') as f:
+                f.write('')
+            print("The file was created and is writable.")
+        except OSError as oserr:
+            print(f'Cannot create db file: {oserr}')
+            sys.exit(2)
 
 def get_db_entries(filename: str) -> set[str]:
     '''
@@ -286,7 +292,7 @@ def get_images_videos(
     for activity_id, data in media_info.items():
         if data['image'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}\\{id_num}\\{activity_id}_{date}.jpg'
+            filename = fr'{os.getcwd()}\{id_num}\{activity_id}_{date}.jpg'
             try:
                 req = requests.get(data['image'], timeout=30)
                 req.raise_for_status()
@@ -295,13 +301,16 @@ def get_images_videos(
                     f'unable to get image {
                         data["image"]}: {req.status_code} - {err}')
             with open(filename, 'wb') as fn:
-                fn.write(req.content)
+                try:
+                    fn.write(req.content)
+                except OSError as ose:
+                    print(f'Error writing {filename}: {ose}')
             update_exif_data(filename, data)
             ids_downloaded.add(activity_id)
 
         if data['video'] is not None:
             date = data['create_date'].replace(':', '_')
-            filename = f'{os.getcwd()}\\{id_num}\\{activity_id}_{date}.mov'
+            filename = fr'{os.getcwd()}\{id_num}\{activity_id}_{date}.mov'
             try:
                 req = requests.get(data['video'], timeout=30)
                 req.raise_for_status()
@@ -336,7 +345,7 @@ def update_db_info(child_id: str, activity_id: set[str]) -> None:
     IOError: If an error occurs while reading or writing the file.
     OSError: If an error occurs while reading or writing the file.
     '''
-    filename = f'{os.getcwd()}\\{child_id}\\id.db'
+    filename = fr'{os.getcwd()}\{child_id}\id.db'
     current_db = set(open(filename, encoding='utf-8').read().split())
     current_db.update(activity_id)
     try:
@@ -460,7 +469,7 @@ HIMAMA_SESSION_ID = signme_in(
 
 make_db_file(getopts['id'], getopts['db_insert'])
 
-db_ids = get_db_entries(f'{os.getcwd()}\\{getopts["id"]}\\id.db')
+db_ids = get_db_entries(fr'{os.getcwd()}\{getopts["id"]}\id.db')
 kc_web_data = connect_to_kc(getopts['id'], db_ids)
 new_ids = get_images_videos(kc_web_data, getopts['id'])
 
