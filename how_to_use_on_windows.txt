@@ -1,0 +1,33 @@
+Open Chrome and get your children/child id number (e.g. 123456). This can be found by clicking on "Journal" in the classroom.kindercare.com site. The browser address browser will have the address (e.g. classroom.kindercare.com/accounts/123456/journal - you want "123456")
+You need your login username and password.
+
+Go to https://github.com/wrestleraaron/kindercare_media_downloads
+Look for "Releases" on the right-hand side and click on Latest (e.g. Fixed Folder Creation issue)
+Download all 3 exe files (chromedriver.exe, exiftool.exe, kc.exe) and make sure they are in the same folder (usually "Downloads"). All 3 files have to be in the same folder. These steps assume the folder is "Dowmloads".
+If you get a warning saying the file might be malicious, click to keep it. It is not malicious, but it is new and unknown to the scanning engines.
+
+Open a command prompt (hit the windows key and R at the same time and type cmd and click ok)
+Go the downloads folder (or where you downloaded the files) by typing "cd downloads" or "cd %homepath%\downloads" (without quotes)
+
+type "kc -k 123456" (without quotes, and make sure the number matches the account number for your child as found in the first paragraph.
+You will be prompted to enter your login username and password. Chrome will open up, log you in and close. You may see errors in the screen, but the errors normal. The end of this document has the "good" errors and what to expect to know it's working. 
+
+It will download files after you get a message "All media retrieved". The program will run for a while depending on connection speeds and how many files it needs to retrieve. You may see some warnings, but those are primarily due to trying to add title and descriptions to the images.
+
+Images and videos are stored in a folder named the child's id number (e.g. Downloads\123456). You should see this folder and the files created during the process.
+
+The next time you run this, the only files that are downloaded are the files created since you ran it last (so the first run will be take the longest)
+
+Messages expected:
+DevTools listening on ws://127.0.0.1:50128/devtools/browser/7f45390b-xxxx-xxxx-81d9-7xxxxxa0c31
+[3220:4296:0501/194141.855:ERROR:ssl_client_socket_impl.cc(879)] handshake failed; returned -1, SSL error code 1, net_error -100
+[3220:4296:0501/194141.887:ERROR:ssl_client_socket_impl.cc(879)] handshake failed; returned -1, SSL error code 1, net_error -100
+
+How you know it's working:
+C:\Users\username\Downloads\123456
+The file was created and is writable.
+Getting media from page 1
+Getting media from page 2
+Getting media from page 3
+Getting media from page 4
+Getting media from page 5
