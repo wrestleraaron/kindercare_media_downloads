@@ -4,10 +4,12 @@ Get Kindercare Media for child
 import getopt
 import getpass
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
 
+import chromedriver_autoinstaller
 import requests
 # import ffmpeg
 from selenium import webdriver
@@ -456,6 +458,7 @@ def signme_in(username: str, password: str, signin_url: str) -> str:
 
 
 getopts = get_options(sys.argv[1:])
+chromedriver_autoinstaller.install()
 
 user = input(
     'Please enter your Kindercare Classroom login (email/username):')
@@ -468,6 +471,7 @@ HIMAMA_SESSION_ID = signme_in(
     'https://classroom.kindercare.com')
 
 make_db_file(getopts['id'], getopts['db_insert'])
+
 
 db_ids = get_db_entries(fr'{os.getcwd()}\{getopts["id"]}\id.db')
 kc_web_data = connect_to_kc(getopts['id'], db_ids)
