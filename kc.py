@@ -1,10 +1,8 @@
 '''
 Get Kindercare Media for child
 '''
-import getopt
 import getpass
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime
@@ -33,61 +31,7 @@ def usage() -> None:
     sys.exit(1)
 
 
-def get_options(args: list[str]) -> dict[str, str]:
-    '''
-    Parses command-line arguments and returns a dictionary of options.
-
-    This function takes a list of command-line arguments and processes them using the
-    getopt module. It supports both short and long options and maps them to a
-    dictionary with descriptive keys and string values representing the user's choices.
-
-    Args:
-        args: A list of command-line arguments (strings).
-
-    Returns:
-        A dictionary containing parsed options with the following keys:
-          - `db_insert` (str): 'True' if the downloaded media ID should be added
-                              to the local database, 'False' otherwise (default).
-          - `id` (str): The child ID value provided by the user using the '-k' or
-                              '--id' option (default '0').
-
-    Raises:
-        getopt.error: If an error occurs during option parsing.
-
-    Examples:
-        >>> options = get_options(["-k", "123"])
-        >>> print(options)
-        {'db_insert': 'True', 'id': '123'}
-    '''
-    options = 'ik:'
-
-    long_options = [
-        'ignore database - id of the downloaded media is not added to the local db',
-        "child id value for the child's profile = "]
-
-    try:
-        arguments, _ = getopt.getopt(args, options, long_options)
-        inputs = {
-            'db_insert': 'True',
-            'id': '0'
-        }
-        for currentargument, currentvalue in arguments:
-            if currentargument in ('-i', '--ignore_db'):
-                inputs['db_insert'] = False
-            elif currentargument in ('-k', '--id'):
-                inputs['id'] = currentvalue
-            elif currentargument in ('-h', '--help'):
-                print('get help')
-
-    except getopt.error as err:
-        # output error, and return with an error code
-        print(str(err), type(err))
-        usage()
-
-    return inputs
-
-
-def make_db_file(child_id: str, db_insert: bool) -> None:
+def make_db_file(child_id: str) -> None:
     '''
     Creates or checks a database file for a given child ID.
 
@@ -98,8 +42,6 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
 
     Args:
         child_id: The child ID string for which the database file is managed.
-        db_insert: A string indicating whether the user wants to update the database
-            (value "0"). If not set to "0", the database file is not created or checked.
 
     Returns:
         None. The function primarily creates and checks file and directory states.
@@ -108,10 +50,9 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
         OSError: If file/directory creation or writing fails.
     '''
     if os.path.exists(fr'{os.getcwd()}\{child_id}'):
-        if db_insert:  # user wants to update the db, check we can write to it
-            if not os.access(fr'{os.getcwd()}\{child_id}\id.db', os.W_OK):
-                print(
-                    'Folder exists but is not writable. Downloaded media will not be added to db')
+        if not os.access(fr'{os.getcwd()}\{child_id}\id.db', os.W_OK):
+            print(
+            'Folder exists but is not writable. Downloaded media will not be added to db')
         try:
             if os.path.isfile(fr'{os.getcwd()}\{child_id}\id.db'):
                 if not os.access(fr'{os.getcwd()}\{child_id}\id.db', os.W_OK):
@@ -138,6 +79,7 @@ def make_db_file(child_id: str, db_insert: bool) -> None:
         except OSError as oserr:
             print(f'Cannot create db file: {oserr}')
             sys.exit(2)
+
 
 def get_db_entries(filename: str) -> set[str]:
     '''
@@ -208,7 +150,7 @@ def connect_to_kc(child_id: str, id_set: set[str]) -> dict[str, any]:
         results.update(get_kcdata(req.json(), id_set))
         if len(req.json()['intervals']) == 0:
             new_results = False
-            print('All media retrieved')
+            print('All media identified')
         count += 1
     return results
 
@@ -308,6 +250,7 @@ def get_images_videos(
                 except OSError as ose:
                     print(f'Error writing {filename}: {ose}')
             update_exif_data(filename, data)
+            update_datestamp(filename, data['create_date'])
             ids_downloaded.add(activity_id)
 
         if data['video'] is not None:
@@ -398,7 +341,26 @@ def update_exif_data(filename: str, media_info: dict[str, str]) -> None:
                                filename])
         os.remove(f'{filename}_original')
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
+        print(f"Command failed with return code {e.returncode} ({e})")
+
+
+def update_datestamp(file: str, datestamp: str):
+    '''
+    Updates the datestamp of the file to match the date the media was taken.
+
+    Args:
+        file: The path to the image file (str).
+        datestamp: The creation date of the media in YYYY-MM-DDTHH:MM:SS format. (str)
+
+    Raises:
+        Exception: If the timestamp cannot be updated. Not fatal error.
+    '''
+    dt = datetime.strptime(datestamp, "%Y-%m-%dT%H:%M:%S")
+    dt_num = int(dt.timestamp())
+    try:
+        os.utime(file, (dt_num, dt_num))
+    except Exception as err:
+        print(f'Unable to update timestamp of {file} ({err})')
 
 
 def update_video_data(filename: str, media_info: dict) -> None:
@@ -457,9 +419,9 @@ def signme_in(username: str, password: str, signin_url: str) -> str:
     return driver.get_cookie('_himama_session')['value']
 
 
-getopts = get_options(sys.argv[1:])
 chromedriver_autoinstaller.install()
 
+kc_id = input('Please enter your child classroom.kindercare.com ID: ')
 user = input(
     'Please enter your Kindercare Classroom login (email/username):')
 print('Please enter your Kindercare Classroom login password:')
@@ -470,12 +432,11 @@ HIMAMA_SESSION_ID = signme_in(
     passwd,
     'https://classroom.kindercare.com')
 
-make_db_file(getopts['id'], getopts['db_insert'])
-
-
-db_ids = get_db_entries(fr'{os.getcwd()}\{getopts["id"]}\id.db')
-kc_web_data = connect_to_kc(getopts['id'], db_ids)
-new_ids = get_images_videos(kc_web_data, getopts['id'])
-
-if getopts['db_insert']:
-    update_db_info(getopts['id'], new_ids)
+make_db_file(kc_id)
+db_ids = get_db_entries(fr'{os.getcwd()}\{kc_id}\id.db')
+kc_web_data = connect_to_kc(kc_id, db_ids)
+print('Downloading media. Please be patient...')
+new_ids = get_images_videos(kc_web_data, kc_id)
+print('All media downloaded. Updating database.')
+update_db_info(kc_id, new_ids)
+print('Finished succesfully. Enjoy your pictures and videos!')
