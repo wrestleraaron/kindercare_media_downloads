@@ -1,5 +1,5 @@
 '''
-Get Kindercare Media for child
+Download posted media from your childcare provider (Lillio or Kindercare)
 '''
 import argparse
 import os
@@ -14,14 +14,18 @@ import ffmpeg
 import requests
 from playwright.sync_api import sync_playwright
 
+# Location of auth file for saving cookies
+AUTH_FILE = Path("auth_state.json")
 
+# Set your provider, either KinderCare or Lillio (Himama)
+PROVIDER = "Kindercare"
 
 def usage_help() -> None:
     """Prints usage help and exits the program."""
     print(f'Usage: {sys.argv[0]} [-i]')
     print('Use the -i flag to ignore writing to the local database, allowing the pictures and')
     print('videos to be downloaded again on this device.')
-    print("Pictures and videos are stored in a folder corresponding to the child's KinderCare ID")
+    print(f"Pictures and videos are stored in a folder corresponding to the child's {PROVIDER} ID")
     sys.exit(1)
 
 
@@ -35,7 +39,7 @@ def get_options(args = sys.argv[1:]) -> dict[str, Any]:
     Returns:
         dict[str, Any]: Dictionary with parsed command-line options.
     """
-    parser = argparse.ArgumentParser(description="Download media from KinderCare accounts.")
+    parser = argparse.ArgumentParser(description=f"Download media from {PROVIDER} accounts.")
     parser.add_argument('-i', '--ignore', action='store_true',
                         help='Do not add media to local database')
     parser.add_argument('-?', dest='need_help', action='store_true',
@@ -43,13 +47,12 @@ def get_options(args = sys.argv[1:]) -> dict[str, Any]:
     opts = parser.parse_args(args)
     return vars(opts)
 
-
 def make_db_file(child_id: str) -> None:
     """
     Creates a local database file for a given child ID if it doesn't already exist.
 
     Args:
-        child_id (str): KinderCare child ID.
+        child_id (str): provider's child ID.
 
     Raises:
         SystemExit: If the file or folder can't be created.
@@ -87,13 +90,13 @@ def get_db_entries(filename: str) -> Set[str]:
         sys.exit(3)
 
 
-def connect_to_kc_playwright(context, child_id: str, id_set: Set[str]) -> Dict[str, Any]:
+def connect_to_kc_playwright(WEB_URL: str, context, child_id: str, id_set: Set[str]) -> Dict[str, Any]:
     """
-    Retrieves all media metadata from KinderCare using the Playwright context.
+    Retrieves all media metadata from provider using the Playwright context.
 
     Args:
         context: Playwright context.
-        child_id (str): KinderCare child ID.
+        child_id (str): provider's child ID.
         id_set (Set[str]): Set of already downloaded activity IDs.
 
     Returns:
@@ -104,7 +107,7 @@ def connect_to_kc_playwright(context, child_id: str, id_set: Set[str]) -> Dict[s
 
     while True:
         print(f'Getting media from page {count}')
-        url = f'https://classroom.kindercare.com/accounts/{child_id}/journal_api?page={count}'
+        url = f'https://{WEB_URL}/accounts/{child_id}/journal_api?page={count}'
         try:
             response = context.request.get(url)
             data = response.json()
@@ -123,10 +126,10 @@ def connect_to_kc_playwright(context, child_id: str, id_set: Set[str]) -> Dict[s
 
 def get_kcdata(json_data: Dict[str, Any], id_set: Set[str]) -> Dict[str, Dict[str, str]]:
     """
-    Filters KinderCare media JSON for new entries.
+    Filters provider's media JSON for new entries.
 
     Args:
-        json_data (Dict[str, Any]): Parsed JSON response from KinderCare.
+        json_data (Dict[str, Any]): Parsed JSON response from provider.
         id_set (Set[str]): Set of previously downloaded activity IDs.
 
     Returns:
@@ -159,7 +162,7 @@ def get_images_videos(media_info: Dict[str, Dict[str, str]], id_num: str) -> Set
 
     Args:
         media_info (Dict[str, Dict[str, str]]): Metadata of media to download.
-        id_num (str): KinderCare child ID.
+        id_num (str): provider's child ID.
 
     Returns:
         Set[str]: Set of successfully downloaded activity IDs.
@@ -203,7 +206,7 @@ def update_db_info(child_id: str, activity_ids: Set[str]) -> None:
     Updates the database file with new activity IDs.
 
     Args:
-        child_id (str): KinderCare child ID.
+        child_id (str): provider's child ID.
         activity_ids (Set[str]): Set of new activity IDs.
 
     Raises:
@@ -315,7 +318,7 @@ def signme_in(signin_url: str) -> Tuple[Any, Set[str], Any, Any]:
     Automates browser sign-in using Playwright.
 
     Args:
-        signin_url (str): URL for KinderCare sign-in.
+        signin_url (str): URL for provider sign-in.
 
     Returns:
         Tuple[Any, Set[str], Any, Any]: Context, set of profile IDs, browser, 
@@ -323,7 +326,12 @@ def signme_in(signin_url: str) -> Tuple[Any, Set[str], Any, Any]:
     """
     p = sync_playwright().start()
     browser = p.chromium.launch(headless=False)
-    context = browser.new_context()
+
+    if AUTH_FILE.exists():
+        context = browser.new_context(storage_state=str(AUTH_FILE))
+    else:
+        context = browser.new_context()
+
     page = context.new_page()
 
     page.goto(signin_url)
@@ -332,6 +340,8 @@ def signme_in(signin_url: str) -> Tuple[Any, Set[str], Any, Any]:
     page.goto(f"{signin_url}/accounts")
     page.wait_for_selector('a:has-text("Profile")', timeout=300000)
     profile_links = page.query_selector_all('a:has-text("Profile")')
+
+    page.context.storage_state(path=str(AUTH_FILE))
 
     account_numbers = {
         match.group(1)
@@ -362,7 +372,7 @@ def get_tool_path(tool_name: str) -> str:
 
 def main(ignore: bool, need_help: bool) -> None:
     """
-    Main control flow for the KinderCare media downloader.
+    Main control flow for the media downloader.
 
     Args:
         ignore (bool): Whether to skip updating the local database.
@@ -371,7 +381,15 @@ def main(ignore: bool, need_help: bool) -> None:
     if need_help:
         usage_help()
 
-    context, profile_ids, browser, playwright = signme_in('https://classroom.kindercare.com')
+    # Set URL based on PROVIDER value
+    if PROVIDER.lower() == "kindercare":
+        WEB_URL = "classroom.kindercare.com"
+    elif PROVIDER.lower() == "lillio":
+        WEB_URL = "himama.com"
+    else:
+        raise ValueError(f"Unsupported provider: {PROVIDER}. Supported: 'Kindercare', 'Lillio'")
+
+    context, profile_ids, browser, playwright = signme_in(f'https://{WEB_URL}')
 
     for profile_id in profile_ids:
         print(f'Getting data for {profile_id}...')
@@ -379,7 +397,7 @@ def main(ignore: bool, need_help: bool) -> None:
             make_db_file(profile_id)
 
         db_ids = get_db_entries(str(Path.cwd() / profile_id / "id.db"))
-        kc_web_data = connect_to_kc_playwright(context, profile_id, db_ids)
+        kc_web_data = connect_to_kc_playwright(WEB_URL, context, profile_id, db_ids)
         new_ids = get_images_videos(kc_web_data, profile_id)
 
         if not ignore:
