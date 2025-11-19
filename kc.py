@@ -4,6 +4,7 @@ Download posted media from your childcare provider (Lillio or Kindercare)
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -231,6 +232,17 @@ def encode_utf16le_hex(text: str) -> str:
     """
     return ''.join(f'{b:02x}' for b in text.encode('utf-16le')) + '0000'
 
+def tool_exists(path: Path) -> bool:
+    """
+    Validates that the specified tool is present on disk
+    """
+    if Path(path).is_file():
+        return True
+
+    if shutil.which(os.path.basename(path)):
+        return True
+
+    return False
 
 def update_exif_data(filename: Path, media_info: Dict[str, str]) -> None:
     """
@@ -381,6 +393,18 @@ def main(ignore: bool, need_help: bool) -> None:
     if need_help:
         usage_help()
 
+    # Check for required tooling now rather than when needed, leading to a crash
+    exiftool_path = get_tool_path('exiftool.exe')
+    if not tool_exists(exiftool_path):
+        print(f"{exiftool_path} not found. Exiting...")
+        sys.exit(1)
+
+    ffmpeg_path = get_tool_path('ffmpeg.exe')
+    if not tool_exists(ffmpeg_path):
+        print(f"{ffmpeg_path} not found. Exiting...")
+        sys.exit(1)
+
+    context, profile_ids, browser, playwright = signme_in('https://classroom.kindercare.com')
     # Set URL based on PROVIDER value
     if PROVIDER.lower() == "kindercare":
         WEB_URL = "classroom.kindercare.com"
