@@ -404,7 +404,6 @@ def main(ignore: bool, need_help: bool) -> None:
         print(f"{ffmpeg_path} not found. Exiting...")
         sys.exit(1)
 
-    context, profile_ids, browser, playwright = signme_in('https://classroom.kindercare.com')
     # Set URL based on PROVIDER value
     if PROVIDER.lower() == "kindercare":
         WEB_URL = "classroom.kindercare.com"
