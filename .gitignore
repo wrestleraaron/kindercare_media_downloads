@@ -161,3 +161,4 @@ cython_debug/
 chromedriver.exe
 ffmpeg.exe
 exiftool.exe
+auth_state.json
