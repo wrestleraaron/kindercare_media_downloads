@@ -26,20 +26,26 @@ It also supports media download from **Lillio-powered daycare portals** (Himama 
 ## Installation & How to Run
 
 1. **Install requirements**  
-   Make sure Python 3.12 (or another Python 3 version) is installed. Then, install the dependencies from `requirements.txt`:
+   Ensure you have Python 3.12 (or another Python 3 version) installed.
+   Then, install the dependencies from `requirements.txt`:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Run the Python script**  
+2. **Configure Playwright**
+   ```bash
+   python -m playwright install
+   ```
+   
+3. **Run the Python script**  
    To start downloading media, run:
 
    ```bash
    python kc.py
    ```
 
-3. **Optional flag**  
+4. **Optional flag**  
    If you want to ignore the existing database and force a full fresh download:
 
    ```bash
@@ -88,4 +94,4 @@ This project is licensed under the **GPL-3.0 License**.
 
 ## Contact
 For support or suggestions, contact:  
-**Aaron Tatone** — `yvs9j135@duck.com`
+**`yvs9j135@duck.com`**
