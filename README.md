@@ -7,13 +7,15 @@
 ![Stars](https://img.shields.io/github/stars/wrestleraaron/kindercare_media_downloads?style=social)
 ![Forks](https://img.shields.io/github/forks/wrestleraaron/kindercare_media_downloads?style=social)
 
+
 ## Overview
-This application allows you to download images and videos from your child’s KinderCare profile.  
-It uses the **Playwright** browser automation framework to fetch media from the KinderCare platform and saves it locally on your computer.  
+This application allows you to download images and videos from your child’s daycare profile — including **KinderCare** (via Himama backend) and other **Lillio-powered childcare centers**.
+
+It uses the **Playwright** browser automation framework to fetch media from these platforms and saves it locally on your computer.  
 It also updates **EXIF** and video metadata (title and description) for images and videos.
 
-This tool acts as a *sync utility* — it uses a local ID database (`id.db`) to ensure that only new media is downloaded.  
-It also supports media download from **Lillio-powered daycare portals** (Himama backend).
+The tool functions as a *sync utility* — maintaining a local ID database (`id.db`) to only download new media.  
+It is confirmed to work with multiple child care centers using Lillio (formerly HiMama), such as Little Discoveries Early Learning Cooperative, Lakeside Childcare, and Little Explorer Montessori.
 
 ---
 
